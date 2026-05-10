@@ -17,7 +17,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Usage: %s <file_name>\n", argv[0]);
         return 1;
     }
-
     Graph graph;
     char error[128];
     if (!load_graph(argv[1], &graph, error, sizeof(error))) {
