@@ -1,5 +1,4 @@
 #include "graph.h"
-
 #include <stdio.h>
 
 static void print_path(const Path *path) {
@@ -32,7 +31,6 @@ int main(int argc, char **argv) {
     }
 
     print_path(&path);
-
     free_path(&path);
     free_graph(&graph);
     return 0;
