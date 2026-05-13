@@ -6,13 +6,19 @@ ifeq ($(strip $(RAYLIB_LIBS)),)
 RAYLIB_LIBS = -lraylib -lm
 endif
 
-.PHONY: milestone1 milestone2 milestone3 clean
+.PHONY: milestone1 milestone2 milestone3 milestone4 milestone5 clean
 
 milestone1: dijkstra
 
 milestone2: sim
 
 milestone3: sim
+
+milestone4: graph.o sim4.o
+	$(CC) $(CFLAGS) -o sim sim4.o graph.o $(RAYLIB_LIBS)
+
+milestone5: graph.o sim5.o
+	$(CC) $(CFLAGS) -o sim sim5.o graph.o $(RAYLIB_LIBS)
 
 dijkstra: dijkstra_main.o graph.o
 	$(CC) $(CFLAGS) -o dijkstra dijkstra_main.o graph.o
@@ -28,6 +34,12 @@ graph.o: graph.c graph.h
 
 sim.o: sim.c graph.h
 	$(CC) $(CFLAGS) $(RAYLIB_CFLAGS) -c sim.c
+
+sim4.o: sim4.c graph.h
+	$(CC) $(CFLAGS) $(RAYLIB_CFLAGS) -c sim4.c
+
+sim5.o: sim5.c graph.h
+	$(CC) $(CFLAGS) $(RAYLIB_CFLAGS) -c sim5.c
 
 clean:
 	rm -f dijkstra sim *.o
