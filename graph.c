@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h> // Added to handle strings when reading the "travelers" keyword
 
 static bool read_non_negative_int(FILE *file, int *value, char *error, int error_size) {
     if (fscanf(file, "%d", value) != 1) {
@@ -209,4 +210,112 @@ int edge_weight_between(const Graph *graph, int src, int dst) {
         }
     }
     return -1;
+}
+
+// --------------------------------------------------------------------------------
+// New functions for Milestones 4 and 5 (Parsing multiple travelers)
+// --------------------------------------------------------------------------------
+
+bool load_graph_extended(const char *file_name, Graph *graph, Traveler **travelers, int *num_travelers, char *error, int error_size) {
+    FILE *file = fopen(file_name, "r");
+    if (file == NULL) {
+        snprintf(error, error_size, "Could not open file");
+        return false;
+    }
+
+    graph->n = 0;
+    graph->m = 0;
+    graph->edges = NULL;
+    graph->source = -1; // Not used in this milestone
+    graph->target = -1; // Not used in this milestone
+
+    // Read graph size
+    if (!read_non_negative_int(file, &graph->n, error, error_size) ||
+        !read_non_negative_int(file, &graph->m, error, error_size)) {
+        fclose(file);
+        return false;
+    }
+
+    if (graph->n == 0) {
+        snprintf(error, error_size, "Invalid input: graph must contain at least one vertex");
+        fclose(file);
+        return false;
+    }
+
+    // Allocate memory for graph edges
+    graph->edges = malloc((size_t)graph->m * sizeof(Edge));
+    if (graph->m > 0 && graph->edges == NULL) {
+        snprintf(error, error_size, "Memory allocation failed");
+        fclose(file);
+        return false;
+    }
+
+    // Read edges
+    for (int i = 0; i < graph->m; i++) {
+        Edge edge;
+        if (!read_non_negative_int(file, &edge.src, error, error_size) ||
+            !read_non_negative_int(file, &edge.dst, error, error_size) ||
+            !read_non_negative_int(file, &edge.weight, error, error_size)) {
+            free_graph(graph);
+            fclose(file);
+            return false;
+        }
+
+        if (edge.src >= graph->n || edge.dst >= graph->n) {
+            snprintf(error, error_size, "Invalid input: vertex index out of range");
+            free_graph(graph);
+            fclose(file);
+            return false;
+        }
+
+        graph->edges[i] = edge;
+    }
+
+    // Skip lines until we find the word "travelers"
+    char buffer[256];
+    bool found_travelers = false;
+    while (fscanf(file, "%255s", buffer) == 1) {
+        if (strcmp(buffer, "travelers") == 0) {
+            found_travelers = true;
+            break;
+        }
+    }
+
+    if (!found_travelers) {
+        snprintf(error, error_size, "Invalid input: missing '# travelers' section");
+        free_graph(graph);
+        fclose(file);
+        return false;
+    }
+
+    // Read the number of travelers
+    if (fscanf(file, "%d", num_travelers) != 1 || *num_travelers < 0) {
+        snprintf(error, error_size, "Invalid input: invalid number of travelers");
+        free_graph(graph);
+        fclose(file);
+        return false;
+    }
+
+    // Allocate memory for travelers
+    *travelers = malloc((size_t)(*num_travelers) * sizeof(Traveler));
+    if (*num_travelers > 0 && *travelers == NULL) {
+        snprintf(error, error_size, "Memory allocation failed for travelers");
+        free_graph(graph);
+        fclose(file);
+        return false;
+    }
+
+    // Read traveler data (source and destination)
+    for (int i = 0; i < *num_travelers; i++) {
+        if (fscanf(file, "%d %d", &((*travelers)[i].source), &((*travelers)[i].dest)) != 2) {
+            snprintf(error, error_size, "Invalid input: error reading traveler data");
+            free(*travelers);
+            free_graph(graph);
+            fclose(file);
+            return false;
+        }
+    }
+
+    fclose(file);
+    return true;
 }
