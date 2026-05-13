@@ -24,6 +24,17 @@ typedef struct {
     bool found;
 } Path;
 
+// New data structure to store the source and destination for each traveler
+typedef struct {
+    int source;
+    int dest;
+} Traveler;
+
+// Updated parsing function (or a new one dedicated to advanced milestones)
+// This function uses pointers to return the array of travelers and their count
+Graph* parse_graph_extended(const char* filename, Traveler** travelers, int* num_travelers);
+
+
 bool load_graph(const char *file_name, Graph *graph, char *error, int error_size);
 void free_graph(Graph *graph);
 
