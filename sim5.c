@@ -262,7 +262,7 @@ int main(int argc, char **argv) {
     }
 
     // Reap all child processes cleanly
-    while (wait(NULL) > 0);
+    while (wait(NULL) > 0 );
 
     free_graph(&graph);
     free(travelers);
