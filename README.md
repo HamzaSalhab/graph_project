@@ -1,10 +1,26 @@
+
+```markdown
 # Operating Systems Graph Simulation
 
 This project implements a multi-milestone graph simulation in C, utilizing Linux system programming, Raylib for GUI, and IPC/Synchronization mechanisms.
 
 ## Input Format
 
-All numbers must be non-negative. Vertex indexes must be in the range 0..N-1.
+```text
+N M
+src dst weight
+...
+source target
+
+travelers
+T
+src1 dst1
+...
+srcT dstT
+
+```
+
+All numbers must be non-negative. Vertex indexes must be in the range `0..N-1`.
 
 ## Milestones Overview & Execution
 
@@ -34,10 +50,11 @@ All numbers must be non-negative. Vertex indexes must be in the range 0..N-1.
 
 ### Milestone 6: Node Synchronization (Critical Section)
 
-* **Implementation**: Introduces POSIX Named Semaphores to enforce mutual exclusion at graph nodes. Only one child process can occupy a node at a time. If an intersection is occupied, waiting processes yield, turn **RED** in the GUI, and display a **WAIT** label until the critical section is cleared.
+* **Implementation**: Introduces POSIX Named Semaphores to enforce mutual exclusion at graph nodes. Only one child process can occupy a node at a time. If an intersection is occupied, waiting processes yield, turn RED in the GUI, and display a WAIT label until the critical section is cleared.
 * **Build**: `make milestone6`
 * **Run**: `./sim5 sample_graph.txt`
 
 ## Clean
 
 * **Command**: `make clean` (Removes all generated object files and binaries).
+
