@@ -1,5 +1,5 @@
 
-```markdown
+
 # Operating Systems Graph Simulation
 
 This project implements a multi-milestone graph simulation in C, utilizing Linux system programming, Raylib for GUI, and IPC/Synchronization mechanisms.
