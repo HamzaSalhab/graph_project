@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <semaphore.h> // Include standard named semaphore library for synchronization
 #include <string.h>
+#include <stdbool.h>
 #include <sys/mman.h>
 #include "raylib.h"
 
@@ -38,6 +39,7 @@ typedef struct {
     int queue_count[MAX_NODES];
     WaitRequest queues[MAX_NODES][MAX_TRAVELERS];
     unsigned long next_seq;
+    int paused;
 } SharedScheduler;
 
 // Traveler status states to control rendering colors in the GUI
@@ -184,6 +186,34 @@ static void unlock_scheduler(SharedScheduler *shared) {
     sem_close(mutex);
 }
 
+static int is_simulation_paused(SharedScheduler *shared) {
+    int value;
+    lock_scheduler(shared);
+    value = shared->paused;
+    unlock_scheduler(shared);
+    return value;
+}
+
+static void wait_if_paused(SharedScheduler *shared) {
+    while (is_simulation_paused(shared)) {
+        usleep(100000);
+    }
+}
+
+static void sleep_with_pause(SharedScheduler *shared, int total_microseconds) {
+    int elapsed = 0;
+    const int step = 50000;
+
+    while (elapsed < total_microseconds) {
+        wait_if_paused(shared);
+
+        int remaining = total_microseconds - elapsed;
+        int current_step = remaining < step ? remaining : step;
+        usleep(current_step);
+        elapsed += current_step;
+    }
+}
+
 // Parent-side scheduler: chooses who enters each free node according to FCFS or SJF.
 static void process_scheduler(SharedScheduler *shared, SchedulerType scheduler, sem_t **grant_sems, int num_nodes) {
     lock_scheduler(shared);
@@ -243,7 +273,7 @@ void run_child_behavior(int id, Traveler traveler, const Graph *graph, int write
 
         if (i > 0) {
             int weight = edge_weight_between(graph, my_path.vertices[i-1], target_node);
-            usleep(weight * 250000); // Simulate edge transit time
+            sleep_with_pause(shared, weight * 250000); // Simulate edge transit time
 
             PositionUpdate wait_update = { id, my_path.vertices[i-1], target_node, STATUS_WAITING_FOR_NODE };
             write(write_fd, &wait_update, sizeof(PositionUpdate));
@@ -267,7 +297,7 @@ void run_child_behavior(int id, Traveler traveler, const Graph *graph, int write
         arrive_update.status = (i == my_path.length - 1) ? STATUS_ARRIVED : STATUS_INSIDE_NODE;
         write(write_fd, &arrive_update, sizeof(PositionUpdate));
 
-        sleep(1); // Critical section: traveler stays inside the node for 1 second
+        sleep_with_pause(shared, 1000000); // Critical section: traveler stays inside the node for 1 second
         release_node(shared, target_node, id);
     }
 
@@ -338,6 +368,7 @@ int main(int argc, char **argv) {
     shared->mutex_name[sizeof(shared->mutex_name) - 1] = '\0';
 
     shared->next_seq = 0;
+    shared->paused = 0;
     for (int i = 0; i < MAX_NODES; i++) {
         shared->occupied_by[i] = -1;
         shared->queue_count[i] = 0;
@@ -400,9 +431,23 @@ int main(int argc, char **argv) {
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "OS Multi-Traveler Synchronization Graph Simulation");
     SetTargetFPS(60);
 
-    while (!WindowShouldClose()) {
-        process_scheduler(shared, scheduler, grant_sems, graph.n);
+    bool paused = false;
+    Rectangle play_stop_button = { 30, 25, 120, 42 };
 
+    while (!WindowShouldClose()) {
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
+            CheckCollisionPointRec(GetMousePosition(), play_stop_button)) {
+            paused = !paused;
+            lock_scheduler(shared);
+            shared->paused = paused ? 1 : 0;
+            unlock_scheduler(shared);
+        }
+
+        if (!paused) {
+            process_scheduler(shared, scheduler, grant_sems, graph.n);
+        }
+
+        if (!paused) {
         for (int i = 0; i < num_travelers; i++) {
             if (visual_travelers[i].status == STATUS_ARRIVED) continue;
 
@@ -427,8 +472,10 @@ int main(int argc, char **argv) {
                 // Anomaly handling
             }
         }
+        }
 
         // Apply smooth visual position vector interpolation mapping
+        if (!paused) {
         for (int i = 0; i < num_travelers; i++) {
             Vector2 target_pos;
             if (visual_travelers[i].status == STATUS_WAITING_FOR_NODE) {
@@ -441,9 +488,18 @@ int main(int argc, char **argv) {
             }
             visual_travelers[i].visual_position = lerp_vec(visual_travelers[i].visual_position, target_pos, 0.08f);
         }
+        }
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
+
+        DrawRectangleRec(play_stop_button, paused ? GREEN : RED);
+        DrawRectangleLinesEx(play_stop_button, 2, DARKGRAY);
+        DrawText(paused ? "PLAY" : "STOP",
+                 (int)play_stop_button.x + 27,
+                 (int)play_stop_button.y + 10,
+                 22,
+                 WHITE);
 
         DrawText(TextFormat("Milestone 7: Scheduler = %s", scheduler == SCHD_FCFS ? "FCFS" : "SJF"), 250, 25, 26, MAROON);
         draw_graph(&graph, node_positions);
