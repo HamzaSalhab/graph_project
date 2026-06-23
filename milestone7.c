@@ -368,7 +368,7 @@ int main(int argc, char **argv) {
     shared->mutex_name[sizeof(shared->mutex_name) - 1] = '\0';
 
     shared->next_seq = 0;
-    shared->paused = 0;
+    shared->paused = 1;
     for (int i = 0; i < MAX_NODES; i++) {
         shared->occupied_by[i] = -1;
         shared->queue_count[i] = 0;
@@ -431,7 +431,7 @@ int main(int argc, char **argv) {
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "OS Multi-Traveler Synchronization Graph Simulation");
     SetTargetFPS(60);
 
-    bool paused = false;
+    bool paused = true;
     Rectangle play_stop_button = { 30, 25, 120, 42 };
 
     while (!WindowShouldClose()) {
