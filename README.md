@@ -36,17 +36,23 @@ All numbers must be non-negative. Vertex indexes must be in the range `0..N-1`.
 * **Build**: `make milestone3`
 * **Run**: `./sim sample_graph.txt`
 
-### Milestone 4: Multi-Processing (fork)
+  
+Milestone 4: Multi-Processing (fork)
 
-* **Implementation**: Utilizes `fork()` to create autonomous child processes for multiple travelers. The parent process manages GUI rendering while children move independently.
-* **Build**: `make milestone4`
-* **Run**: `./sim4 sample_graph.txt`
+Implementation: Utilizes fork() to create autonomous child processes for multiple travelers. The parent process manages GUI rendering while children move independently.
 
-### Milestone 5: Inter-Process Communication (IPC)
+Build: make milestone4
 
-* **Implementation**: Establishes IPC using pipes. Child processes calculate their own paths and stream real-time telemetry (current node, next node) to the parent. The parent uses non-blocking reads to update the GUI and print required terminal logs.
-* **Build**: `make milestone5`
-* **Run**: `./sim5 sample_graph.txt`
+Run: ./sim sample_graph.txt
+
+Milestone 5: Inter-Process Communication (IPC)
+
+Implementation: Establishes IPC using pipes. Child processes calculate their own paths and stream real-time telemetry (current node, next node) to the parent. The parent uses non-blocking reads to update the GUI and print required terminal logs.
+
+Build: make milestone5
+
+Run: ./sim sample_graph.txt
+
 
 ### Milestone 6: Node Synchronization (Critical Section)
 
