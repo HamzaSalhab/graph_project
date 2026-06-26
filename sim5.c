@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <semaphore.h> // Include standard named semaphore library for synchronization
 #include "raylib.h"
+#include <sys/mman.h>
 
 #define WINDOW_WIDTH 1000
 #define WINDOW_HEIGHT 760
@@ -103,7 +104,7 @@ static void draw_graph(const Graph *graph, const Vector2 *positions) {
 }
 
 // Autonomous Child Behavior Logic with Node Synchronization
-void run_child_behavior(int id, Traveler traveler, const Graph *graph, int write_fd) {
+void run_child_behavior(int id, Traveler traveler, const Graph *graph, int write_fd, int *shared_nodes) {
     Path my_path = dijkstra_shortest_path(graph, traveler.source, traveler.dest);
 
     if (!my_path.found || my_path.length == 0) {
@@ -120,20 +121,23 @@ void run_child_behavior(int id, Traveler traveler, const Graph *graph, int write
             int weight = edge_weight_between(graph, my_path.vertices[i-1], target_node);
             usleep(weight * 250000); // Simulate edge transit time
 
-            // 1. Notify Parent: Child reached the entrance of target_node and is now waiting outside
+            // 1. Notify Parent: Child reached the entrance of target_node
             PositionUpdate wait_update = { id, my_path.vertices[i-1], target_node, STATUS_WAITING_FOR_NODE };
             write(write_fd, &wait_update, sizeof(PositionUpdate));
 
-            // 2. Request locking the node (Critical Section Entry) via Named Semaphore
-            char sem_name[64];
-            snprintf(sem_name, sizeof(sem_name), "/node_sem_%d", target_node);
-            sem_t *sem = sem_open(sem_name, 0);
+            // 2. ACTIVE WAITING / SPINNING
+            while (shared_nodes[target_node] == 1) {
+                usleep(10000); // 10ms delay so the CPU doesn't max out
+            }
 
-            sem_wait(sem); // Process will block here automatically if the node is currently occupied
-            sem_close(sem);
+            // Lock the node: Mark this node as occupied
+            shared_nodes[target_node] = 1;
+
+            // Release the previous node you just moved out of
+            shared_nodes[my_path.vertices[i-1]] = 0;
         }
 
-        // 3. Notify Parent: Lock acquired successfully, child is now inside the node
+        // 3. Notify Parent: Lock acquired successfully
         PositionUpdate arrive_update;
         arrive_update.traveler_id = id;
         arrive_update.current_node = target_node;
@@ -141,16 +145,12 @@ void run_child_behavior(int id, Traveler traveler, const Graph *graph, int write
         arrive_update.status = (i == my_path.length - 1) ? STATUS_ARRIVED : STATUS_INSIDE_NODE;
         write(write_fd, &arrive_update, sizeof(PositionUpdate));
 
-        // 4. Mandatory sleep for 1 entire second inside the node as a Critical Section
+        // 4. Mandatory sleep for 1 entire second inside the node
         sleep(1);
 
-        // 5. Leaving the node, release the lock for other waiting child processes
-        if (i > 0) {
-            char sem_name[64];
-            snprintf(sem_name, sizeof(sem_name), "/node_sem_%d", target_node);
-            sem_t *sem = sem_open(sem_name, 0);
-            sem_post(sem); // Release lock
-            sem_close(sem);
+        // 5. Leaving the node (Only if it's the final destination, clear it here)
+        if (i == my_path.length - 1) {
+            shared_nodes[target_node] = 0;
         }
     }
 
@@ -206,6 +206,8 @@ int main(int argc, char **argv) {
         visual_travelers[i].visual_position = node_positions[travelers[i].source];
         child_pids[i] = -1;
     }
+    int *shared_nodes = mmap(NULL, sizeof(int) * 32, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0); /////////
+    for (int n = 0; n < 32; n++) { shared_nodes[n] = 0; } ///////////////////
 
     // Forking loop and IPC pipe channel setups
     for (int i = 0; i < num_travelers; i++) {
@@ -217,7 +219,7 @@ int main(int argc, char **argv) {
 
         if (pid == 0) {
             close(fd[0]);
-            run_child_behavior(i, travelers[i], &graph, fd[1]);
+            run_child_behavior(i, travelers[i], &graph, fd[1], shared_nodes);
             close(fd[1]);
             free_graph(&graph);
             free(travelers);
