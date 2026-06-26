@@ -21,7 +21,8 @@
 typedef enum {
     STATUS_WAITING_FOR_NODE, // Traveler is waiting outside the node (occupied)
     STATUS_INSIDE_NODE,      // Traveler is inside the node (successfully locked)
-    STATUS_ARRIVED           // Traveler reached their final destination
+    STATUS_ARRIVED,           // Traveler reached their final destination
+    STATUS_NO_PATH
 } TravelerStatus;
 
 // Updated IPC payload structure to transmit transit telemetry through pipes
@@ -107,7 +108,7 @@ void run_child_behavior(int id, Traveler traveler, const Graph *graph, int write
     Path my_path = dijkstra_shortest_path(graph, traveler.source, traveler.dest);
 
     if (!my_path.found || my_path.length == 0) {
-        PositionUpdate update = { id, traveler.source, -1, STATUS_ARRIVED };
+     PositionUpdate update = { id, traveler.source, traveler.dest, STATUS_NO_PATH };
         write(write_fd, &update, sizeof(PositionUpdate));
         free_path(&my_path);
         return;
@@ -248,13 +249,32 @@ int main(int argc, char **argv) {
                 visual_travelers[update.traveler_id].status = update.status;
 
                 // Execute strict required terminal logging metrics exclusively from the parent process context
-                if (update.status == STATUS_ARRIVED) {
-                    printf("[%d] arrived at node %d | DESTINATION\n", child_pids[update.traveler_id], update.current_node);
-                } else if (update.status == STATUS_WAITING_FOR_NODE) {
-                    printf("[%d] WAITING outside node %d | currently occupied\n", child_pids[update.traveler_id], update.next_node);
-                } else {
-                    printf("[%d] arrived at node %d | next node: %d\n", child_pids[update.traveler_id], update.current_node, update.next_node);
-                }
+           
+
+if (update.status == STATUS_NO_PATH) {
+    printf("[SPECIAL MESSAGE] Traveler %d has NO PATH from node %d to node %d\n",
+           update.traveler_id,
+           update.current_node,
+           update.next_node);
+
+    visual_travelers[update.traveler_id].status = STATUS_ARRIVED;
+} else if (update.status == STATUS_ARRIVED) {
+    printf("[%d] arrived at node %d | DESTINATION\n",
+           child_pids[update.traveler_id],
+           update.current_node);
+} else if (update.status == STATUS_WAITING_FOR_NODE) {
+    printf("[%d] WAITING outside node %d | currently occupied\n",
+           child_pids[update.traveler_id],
+           update.next_node);
+} else {
+    printf("[%d] arrived at node %d | next node: %d\n",
+           child_pids[update.traveler_id],
+           update.current_node,
+           update.next_node);
+}
+
+
+                
                 fflush(stdout);
             } else if (bytes < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
                 // Anomaly handling
