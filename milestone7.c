@@ -352,6 +352,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+
     char mutex_name[80];
     snprintf(mutex_name, sizeof(mutex_name), "/scheduler_mutex_%ld", (long)getpid());
     sem_unlink(mutex_name);
