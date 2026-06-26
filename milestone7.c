@@ -137,8 +137,10 @@ static int remaining_work_from_index(const Graph *graph, const Path *path, int i
     }
     return total;
 }
+
 static void lock_scheduler(SharedScheduler *shared);
 static void unlock_scheduler(SharedScheduler *shared);
+
 static void enqueue_wait_request(SharedScheduler *shared, int node, int traveler_id, int remaining_work) {
     lock_scheduler(shared);
 
@@ -215,16 +217,30 @@ static void sleep_with_pause(SharedScheduler *shared, int total_microseconds) {
 }
 
 // Parent-side scheduler: chooses who enters each free node according to FCFS or SJF.
+// --- Updated to fulfill Milestone 7 Task B output printing metrics ---
 static void process_scheduler(SharedScheduler *shared, SchedulerType scheduler, sem_t **grant_sems, int num_nodes) {
     lock_scheduler(shared);
 
     for (int node = 0; node < num_nodes; node++) {
+        // Only evaluate scheduling decisions if the node is free and has requests in queue
         if (shared->occupied_by[node] != -1 || shared->queue_count[node] == 0) {
             continue;
         }
 
+        // --- MILESTONE 7 Requirement: Print who is waiting (Queue Status) ---
+        printf("\n--- SCHEDULER DECISION FOR NODE %d ---\n", node);
+        printf("Waiting Queue: ");
+        for (int i = 0; i < shared->queue_count[node]; i++) {
+            printf("[Traveler %d: RemWork=%d, Seq=%lu] ", 
+                   shared->queues[node][i].traveler_id, 
+                   shared->queues[node][i].remaining_work, 
+                   shared->queues[node][i].arrival_seq);
+        }
+        printf("\n");
+
         int selected_index = 0;
         if (scheduler == SCHD_SJF) {
+            // Shortest Job First scheduling calculation logic
             for (int i = 1; i < shared->queue_count[node]; i++) {
                 if (shared->queues[node][i].remaining_work < shared->queues[node][selected_index].remaining_work) {
                     selected_index = i;
@@ -235,11 +251,25 @@ static void process_scheduler(SharedScheduler *shared, SchedulerType scheduler, 
         int traveler_id = shared->queues[node][selected_index].traveler_id;
         shared->occupied_by[node] = traveler_id;
 
+        // --- MILESTONE 7 Requirement: Print who was chosen and the reason why ---
+        printf("Chosen Traveler: Traveler %d\n", traveler_id);
+        if (scheduler == SCHD_FCFS) {
+            printf("Reason: FCFS selected Traveler %d because they arrived first (Seq: %lu).\n", 
+                   traveler_id, shared->queues[node][selected_index].arrival_seq);
+        } else {
+            printf("Reason: SJF selected Traveler %d because they have the shortest remaining work (Work: %d).\n", 
+                   traveler_id, shared->queues[node][selected_index].remaining_work);
+        }
+        printf("--------------------------------------\n");
+        fflush(stdout); // Flush stream to ensure immediate console terminal visualization
+
+        // Dequeue selected request and shift array items backward
         for (int i = selected_index; i < shared->queue_count[node] - 1; i++) {
             shared->queues[node][i] = shared->queues[node][i + 1];
         }
         shared->queue_count[node]--;
 
+        // Unblock the approved child traveler process via semaphore signaling
         sem_post(grant_sems[traveler_id]);
     }
 
@@ -448,46 +478,46 @@ int main(int argc, char **argv) {
         }
 
         if (!paused) {
-        for (int i = 0; i < num_travelers; i++) {
-            if (visual_travelers[i].status == STATUS_ARRIVED) continue;
+            for (int i = 0; i < num_travelers; i++) {
+                if (visual_travelers[i].status == STATUS_ARRIVED) continue;
 
-            PositionUpdate update;
-            ssize_t bytes = read(parent_read_fds[i], &update, sizeof(PositionUpdate));
+                PositionUpdate update;
+                ssize_t bytes = read(parent_read_fds[i], &update, sizeof(PositionUpdate));
 
-            if (bytes == sizeof(PositionUpdate)) {
-                visual_travelers[update.traveler_id].current_node = update.current_node;
-                visual_travelers[update.traveler_id].next_node = update.next_node;
-                visual_travelers[update.traveler_id].status = update.status;
+                if (bytes == sizeof(PositionUpdate)) {
+                    visual_travelers[update.traveler_id].current_node = update.current_node;
+                    visual_travelers[update.traveler_id].next_node = update.next_node;
+                    visual_travelers[update.traveler_id].status = update.status;
 
-                // Execute strict required terminal logging metrics exclusively from the parent process context
-                if (update.status == STATUS_ARRIVED) {
-                    printf("[%d] arrived at node %d | DESTINATION\n", child_pids[update.traveler_id], update.current_node);
-                } else if (update.status == STATUS_WAITING_FOR_NODE) {
-                    printf("[%d] WAITING outside node %d | currently occupied\n", child_pids[update.traveler_id], update.next_node);
-                } else {
-                    printf("[%d] arrived at node %d | next node: %d\n", child_pids[update.traveler_id], update.current_node, update.next_node);
+                    // Execute strict required terminal logging metrics exclusively from the parent process context
+                    if (update.status == STATUS_ARRIVED) {
+                        printf("[%d] arrived at node %d | DESTINATION\n", child_pids[update.traveler_id], update.current_node);
+                    } else if (update.status == STATUS_WAITING_FOR_NODE) {
+                        printf("[%d] WAITING outside node %d | currently occupied\n", child_pids[update.traveler_id], update.next_node);
+                    } else {
+                        printf("[%d] arrived at node %d | next node: %d\n", child_pids[update.traveler_id], update.current_node, update.next_node);
+                    }
+                    fflush(stdout);
+                } else if (bytes < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
+                    // Anomaly handling
                 }
-                fflush(stdout);
-            } else if (bytes < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
-                // Anomaly handling
             }
-        }
         }
 
         // Apply smooth visual position vector interpolation mapping
         if (!paused) {
-        for (int i = 0; i < num_travelers; i++) {
-            Vector2 target_pos;
-            if (visual_travelers[i].status == STATUS_WAITING_FOR_NODE) {
-                // If waiting outside, render the passenger circle slightly offset on the edge boundary
-                Vector2 src_pos = node_positions[visual_travelers[i].current_node];
-                Vector2 dst_pos = node_positions[visual_travelers[i].next_node];
-                target_pos = lerp_vec(src_pos, dst_pos, 0.76f);
-            } else {
-                target_pos = node_positions[visual_travelers[i].current_node];
+            for (int i = 0; i < num_travelers; i++) {
+                Vector2 target_pos;
+                if (visual_travelers[i].status == STATUS_WAITING_FOR_NODE) {
+                    // If waiting outside, render the passenger circle slightly offset on the edge boundary
+                    Vector2 src_pos = node_positions[visual_travelers[i].current_node];
+                    Vector2 dst_pos = node_positions[visual_travelers[i].next_node];
+                    target_pos = lerp_vec(src_pos, dst_pos, 0.76f);
+                } else {
+                    target_pos = node_positions[visual_travelers[i].current_node];
+                }
+                visual_travelers[i].visual_position = lerp_vec(visual_travelers[i].visual_position, target_pos, 0.08f);
             }
-            visual_travelers[i].visual_position = lerp_vec(visual_travelers[i].visual_position, target_pos, 0.08f);
-        }
         }
 
         BeginDrawing();
