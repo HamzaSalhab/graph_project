@@ -107,10 +107,15 @@ void run_child_behavior(int id, Traveler traveler, const Graph *graph, int write
     Path my_path = dijkstra_shortest_path(graph, traveler.source, traveler.dest);
 
     if (!my_path.found || my_path.length == 0) {
-        PositionUpdate update = { id, traveler.source, -1, STATUS_ARRIVED };
-        write(write_fd, &update, sizeof(PositionUpdate));
-        free_path(&my_path);
-        return;
+    fprintf(stderr, "[child %d] NO PATH from %d to %d\n",
+            id, traveler.source, traveler.dest);
+
+    PositionUpdate update = { id, traveler.source, -1, STATUS_ARRIVED };
+    write(write_fd, &update, sizeof(PositionUpdate));
+
+    free_path(&my_path);
+    return;
+
     }
 
     for (int i = 0; i < my_path.length; i++) {

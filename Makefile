@@ -3,7 +3,7 @@ CFLAGS = -Wall -Wextra -std=c99 -pedantic
 RAYLIB_CFLAGS := $(shell pkg-config --cflags raylib 2>/dev/null)
 RAYLIB_LIBS := $(shell pkg-config --libs raylib 2>/dev/null)
 ifeq ($(strip $(RAYLIB_LIBS)),)
-RAYLIB_LIBS = -lraylib -lm
+RAYLIB_LIBS = -L/usr/local/lib -lraylib -lm -lpthread -ldl -lrt -lX11
 endif
 
 .PHONY: milestone1 milestone2 milestone3 milestone4 milestone5 milestone6 milestone7 clean
@@ -18,10 +18,10 @@ milestone4: graph.o sim4.o
 	$(CC) $(CFLAGS) -o sim sim4.o graph.o $(RAYLIB_LIBS)
 
 milestone5: graph.o sim5.o
-	$(CC) $(CFLAGS) -o sim sim5.o graph.o $(RAYLIB_LIBS)
+	$(CC) $(CFLAGS) -o sim sim5.o graph.o -L/usr/local/lib -lraylib -lm -lpthread -ldl -lrt -lX11
 
 milestone6: graph.o sim5.o
-	$(CC) $(CFLAGS) -o sim sim5.o graph.o $(RAYLIB_LIBS)
+	$(CC) $(CFLAGS) -o sim sim5.o graph.o -L/usr/local/lib -lraylib -lm -lpthread -ldl -lrt -lX11
 
 milestone7: graph.o milestone7.o
 	$(CC) $(CFLAGS) -o sim milestone7.o graph.o $(RAYLIB_LIBS)
